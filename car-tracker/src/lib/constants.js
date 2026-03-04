@@ -45,18 +45,32 @@ export function fmtKm(v) {
   return n.toLocaleString('ar-SA') + ' كم'
 }
 
+// Compare date strings only — no time zone issues
+function todayStr() {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
+}
+
 export function daysUntil(ds) {
   if (!ds) return null
-  const diff = new Date(ds) - new Date()
-  return Math.ceil(diff / 86400000)
+  // Strip to YYYY-MM-DD, compare date-only (no time component)
+  const target = ds.split('T')[0]
+  const now    = todayStr()
+  // Parse as local midnight to avoid UTC offset flipping the day
+  const [ty,tm,td] = target.split('-').map(Number)
+  const [ny,nm,nd] = now.split('-').map(Number)
+  const msPerDay = 86400000
+  const targetMs = new Date(ty, tm-1, td).getTime()
+  const nowMs    = new Date(ny, nm-1, nd).getTime()
+  return Math.round((targetMs - nowMs) / msPerDay)
 }
 
 export function daysAgo(ds) {
   if (!ds) return null
-  const diff = new Date() - new Date(ds)
-  return Math.floor(diff / 86400000)
+  const du = daysUntil(ds)
+  return du === null ? null : -du
 }
 
 export function today() {
-  return new Date().toISOString().split('T')[0]
+  return todayStr()
 }

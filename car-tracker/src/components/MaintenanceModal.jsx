@@ -26,6 +26,7 @@ export default function MaintenanceModal({ open, onClose, onSave, record }) {
   const [uploading, setUploading] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [fieldErrors, setFieldErrors] = useState({})
   const fileInputRef = useRef(null)
 
   // FIX #1 — reset form every time modal opens with a record
@@ -33,6 +34,7 @@ export default function MaintenanceModal({ open, onClose, onSave, record }) {
     if (!open) return
     setTab('details')
     setError('')
+    setFieldErrors({})
     if (record) {
       setForm({
         title:                record.title                || '',
@@ -137,7 +139,16 @@ export default function MaintenanceModal({ open, onClose, onSave, record }) {
   const updateCaption  = (idx, val) => setPhotos(ps => ps.map((p, i) => i === idx ? { ...p, caption: val } : p))
 
   const submit = async () => {
-    if (!form.title.trim()) { setError('عنوان الصيانة مطلوب'); setTab('details'); return }
+    // Field-level validation with red highlights
+    const errs = {}
+    if (!form.title.trim()) errs.title = true
+    if (Object.keys(errs).length) {
+      setFieldErrors(errs)
+      setError('يرجى تعبئة الحقول المطلوبة المحددة بالأحمر')
+      setTab('details')
+      return
+    }
+    setFieldErrors({})
     setLoading(true); setError('')
     try {
       await onSave({
@@ -182,8 +193,16 @@ export default function MaintenanceModal({ open, onClose, onSave, record }) {
         {tab === 'details' && (
           <motion.div key="details" initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }} transition={{ duration: 0.2 }} className="p-6 flex flex-col gap-5">
             <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-bold text-l4 uppercase tracking-wider">عنوان الصيانة *</label>
-              <input name="title" value={form.title} onChange={handle} placeholder="مثال: تغيير زيت المحرك 5W-30" className={inputCls} />
+              <label className={`text-xs font-bold uppercase tracking-wider ${fieldErrors.title ? 'text-red' : 'text-l4'}`}>
+                عنوان الصيانة *
+                {fieldErrors.title && <span className="mr-2 text-red font-normal normal-case tracking-normal">← هذا الحقل مطلوب</span>}
+              </label>
+              <input
+                name="title" value={form.title}
+                onChange={e => { handle(e); if (fieldErrors.title) setFieldErrors(p => ({...p, title: false})) }}
+                placeholder="مثال: تغيير زيت المحرك 5W-30"
+                className={`${inputCls} ${fieldErrors.title ? 'border-red ring-2 ring-red/20' : ''}`}
+              />
             </div>
 
             <div>

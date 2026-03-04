@@ -7,7 +7,8 @@ export default function ViewModal({ open, onClose, record, onEdit }) {
   const cat = getCat(record.category)
   const st  = getStatus(record.status)
   const du  = daysUntil(record.next_service_date)
-  const parts = record.spare_parts || []
+  const parts  = record.spare_parts || []
+  const photos = Array.isArray(record.photos) ? record.photos : (record.photos ? JSON.parse(record.photos) : [])
   const partsTotal = parts.reduce((s, p) => s + (p.unit_price || 0) * (p.quantity || 1), 0)
 
   const rows = [
@@ -107,6 +108,37 @@ export default function ViewModal({ open, onClose, record, onEdit }) {
             </div>
           </div>
         )}
+        {/* Photos */}
+        {photos.length > 0 && (
+          <div>
+            <div className="text-xs font-bold text-l4 uppercase tracking-wider mb-3">
+              الصور ({photos.length})
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              {photos.map((photo, idx) => (
+                <motion.div
+                  key={idx}
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ delay: idx * 0.06 }}
+                  className="bg-bg3 rounded-2xl overflow-hidden"
+                >
+                  <a href={photo.url} target="_blank" rel="noopener noreferrer">
+                    <img
+                      src={photo.url}
+                      alt={photo.caption || `صورة ${idx + 1}`}
+                      className="w-full h-32 object-cover hover:opacity-90 transition-opacity"
+                    />
+                  </a>
+                  {photo.caption && (
+                    <div className="px-3 py-2 text-xs text-l3">{photo.caption}</div>
+                  )}
+                </motion.div>
+              ))}
+            </div>
+          </div>
+        )}
+
       </div>
     </Modal>
   )
