@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { Analytics } from '@vercel/analytics/react'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import { Spinner } from './components/UI'
@@ -52,6 +53,7 @@ export default function App() {
           </motion.div>
         )}
       </AnimatePresence>
+      <Analytics />
     </div>
   )
 }
