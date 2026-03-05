@@ -6,9 +6,9 @@ import { daysUntil, fmtKm, fmtMoney } from '../lib/constants'
 import emailjs from '@emailjs/browser'
 
 // Fill these after signing up at emailjs.com (see EMAILJS_SETUP.md)
-const EMAILJS_SERVICE_ID  = 'YOUR_SERVICE_ID'
-const EMAILJS_TEMPLATE_ID = 'YOUR_TEMPLATE_ID'
-const EMAILJS_PUBLIC_KEY  = 'YOUR_PUBLIC_KEY'
+const EMAILJS_SERVICE_ID  = 'service_1lc4hnm'
+const EMAILJS_TEMPLATE_ID = 'template_1dqm62b'
+const EMAILJS_PUBLIC_KEY  = 'X72ftp86ZVDpYIETu'
 
 export default function ReminderModal({ open, onClose, car, records, user }) {
   const [email,   setEmail]   = useState('')
@@ -26,7 +26,6 @@ export default function ReminderModal({ open, onClose, car, records, user }) {
 
   const send = async () => {
     if (!email.trim() || !email.includes('@')) { setError('يرجى إدخال بريد إلكتروني صحيح'); return }
-    if (EMAILJS_PUBLIC_KEY === 'YOUR_PUBLIC_KEY') { setError('يرجى إعداد EmailJS أولاً — راجع ملف EMAILJS_SETUP.md'); return }
     setLoading(true); setError('')
     try {
       await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
