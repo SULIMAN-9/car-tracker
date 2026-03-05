@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Modal, Btn, Field, Select } from '../components/UI'
+import { Modal, Btn, Field, Select } from './UI'
 import { FUEL_TYPES } from '../lib/constants'
 
 const empty = { make: '', model: '', year: '', color: '', license_plate: '', vin: '', mileage_at_purchase: '', fuel_type: 'بنزين', notes: '' }

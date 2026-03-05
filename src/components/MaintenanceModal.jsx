@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Plus, Trash2, Upload, X, Image } from 'lucide-react'
-import { Modal, Btn, Chip } from '../components/UI'
+import { Modal, Btn, Chip } from './UI'
 import { CATEGORIES, STATUSES, today } from '../lib/constants'
 import { supabase } from '../lib/supabase'
 
@@ -26,12 +26,15 @@ export default function MaintenanceModal({ open, onClose, onSave, record }) {
   const [uploading, setUploading] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [fieldErrors, setFieldErrors] = useState({})
+  const fileInputRef = useRef(null)
 
   // FIX #1 — reset form every time modal opens with a record
   useEffect(() => {
     if (!open) return
     setTab('details')
     setError('')
+    setFieldErrors({})
     if (record) {
       setForm({
         title:                record.title                || '',
@@ -63,20 +66,69 @@ export default function MaintenanceModal({ open, onClose, onSave, record }) {
   const removePart = i  => setParts(ps => ps.filter((_, idx) => idx !== i))
   const partsTotal = parts.reduce((s, p) => s + (parseFloat(p.unit_price) || 0) * (parseInt(p.quantity) || 1), 0)
 
+  // Accepts images + PDFs + HEIC (iPhone) + common formats
+  const ALLOWED_TYPES = [
+    'image/jpeg','image/jpg','image/png','image/gif','image/webp',
+    'image/heic','image/heif','image/bmp','image/tiff','image/svg+xml',
+    'application/pdf'
+  ]
+
+  const getMimeType = (file) => {
+    // If browser gave us a type, use it
+    if (file.type && file.type !== 'application/octet-stream') return file.type
+    // Fallback: guess from extension
+    const ext = file.name.split('.').pop().toLowerCase()
+    const map = {
+      jpg:'image/jpeg', jpeg:'image/jpeg', png:'image/png',
+      gif:'image/gif',  webp:'image/webp', heic:'image/heic',
+      heif:'image/heif',bmp:'image/bmp',   tiff:'image/tiff',
+      tif:'image/tiff', svg:'image/svg+xml',pdf:'application/pdf'
+    }
+    return map[ext] || 'application/octet-stream'
+  }
+
   const handlePhotoUpload = async (e) => {
     const files = Array.from(e.target.files)
     if (!files.length) return
+    setError('')
     setUploading(true)
+    let uploadedCount = 0
     try {
       for (const file of files) {
-        const ext  = file.name.split('.').pop()
+        const mimeType = getMimeType(file)
+        // Check size (max 10MB)
+        if (file.size > 10 * 1024 * 1024) {
+          setError(`الملف ${file.name} كبير جداً (الحد الأقصى 10 ميغا)`)
+          continue
+        }
+        const ext  = file.name.split('.').pop().toLowerCase() || 'jpg'
         const path = `photos/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`
-        const { error: upErr } = await supabase.storage.from('maintenance-photos').upload(path, file)
-        if (upErr) { console.error(upErr); continue }
-        const { data } = supabase.storage.from('maintenance-photos').getPublicUrl(path)
-        setPhotos(ps => [...ps, { url: data.publicUrl, path, caption: '' }])
+        const { data: upData, error: upErr } = await supabase.storage
+          .from('maintenance-photos')
+          .upload(path, file, {
+            contentType: mimeType,
+            cacheControl: '3600',
+            upsert: false,
+          })
+        if (upErr) {
+          console.error('Upload error:', upErr)
+          setError(`فشل رفع ${file.name}: ${upErr.message}`)
+          continue
+        }
+        const { data: urlData } = supabase.storage
+          .from('maintenance-photos')
+          .getPublicUrl(path)
+        setPhotos(ps => [...ps, { url: urlData.publicUrl, path, caption: '' }])
+        uploadedCount++
       }
-    } finally { setUploading(false) }
+    } catch (err) {
+      console.error('Unexpected upload error:', err)
+      setError('حدث خطأ غير متوقع أثناء الرفع')
+    } finally {
+      setUploading(false)
+      // Reset input so same file can be re-selected
+      e.target.value = ''
+    }
   }
 
   const removePhoto    = async (idx) => {
@@ -87,7 +139,16 @@ export default function MaintenanceModal({ open, onClose, onSave, record }) {
   const updateCaption  = (idx, val) => setPhotos(ps => ps.map((p, i) => i === idx ? { ...p, caption: val } : p))
 
   const submit = async () => {
-    if (!form.title.trim()) { setError('عنوان الصيانة مطلوب'); setTab('details'); return }
+    // Field-level validation with red highlights
+    const errs = {}
+    if (!form.title.trim()) errs.title = true
+    if (Object.keys(errs).length) {
+      setFieldErrors(errs)
+      setError('يرجى تعبئة الحقول المطلوبة المحددة بالأحمر')
+      setTab('details')
+      return
+    }
+    setFieldErrors({})
     setLoading(true); setError('')
     try {
       await onSave({
@@ -132,8 +193,16 @@ export default function MaintenanceModal({ open, onClose, onSave, record }) {
         {tab === 'details' && (
           <motion.div key="details" initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }} transition={{ duration: 0.2 }} className="p-6 flex flex-col gap-5">
             <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-bold text-l4 uppercase tracking-wider">عنوان الصيانة *</label>
-              <input name="title" value={form.title} onChange={handle} placeholder="مثال: تغيير زيت المحرك 5W-30" className={inputCls} />
+              <label className={`text-xs font-bold uppercase tracking-wider ${fieldErrors.title ? 'text-red' : 'text-l4'}`}>
+                عنوان الصيانة *
+                {fieldErrors.title && <span className="mr-2 text-red font-normal normal-case tracking-normal">← هذا الحقل مطلوب</span>}
+              </label>
+              <input
+                name="title" value={form.title}
+                onChange={e => { handle(e); if (fieldErrors.title) setFieldErrors(p => ({...p, title: false})) }}
+                placeholder="مثال: تغيير زيت المحرك 5W-30"
+                className={`${inputCls} ${fieldErrors.title ? 'border-red ring-2 ring-red/20' : ''}`}
+              />
             </div>
 
             <div>
@@ -246,13 +315,31 @@ export default function MaintenanceModal({ open, onClose, onSave, record }) {
         {/* FIX #3 — Photos tab with Supabase Storage */}
         {tab === 'photos' && (
           <motion.div key="photos" initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }} transition={{ duration: 0.2 }} className="p-6 flex flex-col gap-4">
-            <label className={`flex flex-col items-center justify-center gap-2 border-2 border-dashed border-border rounded-2xl p-8 cursor-pointer transition-all hover:border-blue hover:bg-[rgba(10,132,255,0.05)] ${uploading ? 'opacity-50 pointer-events-none' : ''}`}>
-              <input type="file" accept="image/*" multiple onChange={handlePhotoUpload} className="hidden" />
+            {/* Hidden file input — triggered by button click */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*,image/heic,image/heif,.heic,.heif,.jpg,.jpeg,.png,.gif,.webp,.bmp,.tiff,.pdf"
+              multiple
+              onChange={handlePhotoUpload}
+              className="hidden"
+            />
+
+            {/* Upload zone — click triggers the hidden input */}
+            <div
+              onClick={() => !uploading && fileInputRef.current?.click()}
+              className={`flex flex-col items-center justify-center gap-2 border-2 border-dashed border-border rounded-2xl p-8 transition-all
+                ${uploading ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:border-blue hover:bg-[rgba(10,132,255,0.05)]'}`}
+            >
               {uploading
-                ? <><div className="w-6 h-6 border-2 border-blue border-t-transparent rounded-full animate-spin" /><span className="text-l3 text-sm">جاري الرفع...</span></>
-                : <><Upload size={24} className="text-l3" /><span className="text-l2 font-semibold">اضغط لرفع الصور</span><span className="text-l4 text-sm">إيصالات، صور قبل وبعد الصيانة</span></>
+                ? <><div className="w-6 h-6 border-2 border-blue border-t-transparent rounded-full animate-spin" /><span className="text-l3 text-sm mt-2">جاري الرفع...</span></>
+                : <>
+                    <Upload size={28} className="text-blue" />
+                    <span className="text-l1 font-bold text-base">اضغط هنا لرفع الصور</span>
+                    <span className="text-l4 text-xs text-center">JPG · PNG · HEIC · WebP · PDF · وغيرها<br/>الحد الأقصى 10 ميغا للملف</span>
+                  </>
               }
-            </label>
+            </div>
 
             {photos.length === 0 && !uploading && (
               <div className="text-center py-6 text-l4"><Image size={36} className="mx-auto mb-3 opacity-30" /><p className="text-sm">لا توجد صور بعد</p></div>
