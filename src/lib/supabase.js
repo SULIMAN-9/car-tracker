@@ -117,6 +117,50 @@ export async function deleteMaintenance(id) {
   if (error) throw error
 }
 
+
+export async function saveUserEmail(userId, email) {
+  const { data, error } = await supabase
+    .from('users')
+    .update({ email, notifications_enabled: true })
+    .eq('id', userId)
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function updateNotificationSettings(userId, enabled) {
+  const { data, error } = await supabase
+    .from('users')
+    .update({ notifications_enabled: enabled })
+    .eq('id', userId)
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function markNotificationSent(userId) {
+  const { data, error } = await supabase
+    .from('users')
+    .update({ last_notified_at: new Date().toISOString() })
+    .eq('id', userId)
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function getUserFull(userId) {
+  const { data, error } = await supabase
+    .from('users')
+    .select('*')
+    .eq('id', userId)
+    .single()
+  if (error) throw error
+  return data
+}
+
 export async function getAllDataForAdmin() {
   const { data: users } = await supabase.from('users').select('*').order('created_at')
   const { data: cars }  = await supabase.from('cars').select('*').order('created_at')

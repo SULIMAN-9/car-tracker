@@ -9,7 +9,9 @@ import CarModal from '../components/CarModal'
 import MaintenanceModal from '../components/MaintenanceModal'
 import ViewModal from '../components/ViewModal'
 import Footer from '../components/Footer'
-import ReminderModal from '../components/ReminderModal'
+import ReminderModal, { sendMaintenanceReminder } from '../components/ReminderModal'
+import EmailSubscribeModal from '../components/EmailSubscribeModal'
+import { saveUserEmail, updateNotificationSettings, markNotificationSent, getUserFull } from '../lib/supabase'
 
 // ── Toast hook ───────────────────────────────────────────
 function useToast() {
@@ -90,7 +92,7 @@ function MaintCard({ record, isLatest, onView, onEdit, onDelete }) {
 }
 
 // ── Car Detail View ───────────────────────────────────────
-function CarDetail({ car, userId, onBack, onCarUpdated, onCarDeleted, showToast }) {
+function CarDetail({ car, userId, user: initialCarUser, onBack, onCarUpdated, onCarDeleted, onUserUpdated, showToast }) {
   const [records, setRecords] = useState([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState('الكل')
@@ -101,6 +103,8 @@ function CarDetail({ car, userId, onBack, onCarUpdated, onCarDeleted, showToast 
   const [showEditCar, setShowEditCar] = useState(false)
   const [showDeleteCar, setShowDeleteCar] = useState(false)
   const [showReminder, setShowReminder] = useState(false)
+  const [carUser, setCarUser] = useState(initialCarUser || {})
+  const handleUserUpdate = (updated) => { setCarUser(updated); if (onUserUpdated) onUserUpdated(updated) }
 
   const fuel_icons = { بنزين: '⛽', ديزل: '🛢', هجين: '⚡', كهربائي: '🔋' }
 
@@ -263,42 +267,82 @@ function CarDetail({ car, userId, onBack, onCarUpdated, onCarDeleted, showToast 
         title="حذف السيارة"
         message={`هل تريد حذف ${car.make} ${car.model} وجميع سجلات صيانتها؟ لا يمكن التراجع.`} />
       <ReminderModal open={showReminder} onClose={() => setShowReminder(false)}
-        car={car} records={records} user={{name:'المستخدم'}} />
+        car={car} records={records} user={carUser}
+        onNotificationsChanged={handleUserUpdate} />
     </div>
   )
 }
 
 // ── Cars List ─────────────────────────────────────────────
-function CarsList({ user, onLogout, showToast }) {
-  const [cars, setCars] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [showAdd, setShowAdd] = useState(false)
+function CarsList({ user: initialUser, onLogout, showToast }) {
+  const [cars, setCars]               = useState([])
+  const [loading, setLoading]         = useState(true)
+  const [showAdd, setShowAdd]         = useState(false)
   const [selectedCar, setSelectedCar] = useState(null)
+  const [fullUser, setFullUser]       = useState(initialUser)
+  const [showSubscribe, setShowSubscribe] = useState(false)
+
+  // use fullUser everywhere instead of initialUser
+  const user = fullUser
 
   const fuel_icons = { بنزين: '⛽', ديزل: '🛢', هجين: '⚡', كهربائي: '🔋' }
 
   const load = useCallback(async () => {
     setLoading(true)
-    try { setCars(await getCars(user.id)) }
-    catch { showToast('خطأ في تحميل البيانات', 'error') }
+    try {
+      const [carsData, userData] = await Promise.all([
+        getCars(initialUser.id),
+        getUserFull(initialUser.id),
+      ])
+      setCars(carsData)
+      setFullUser(userData)
+    } catch { showToast('خطأ في تحميل البيانات', 'error') }
     finally { setLoading(false) }
-  }, [user.id])
+  }, [initialUser.id])
 
   useEffect(() => { load() }, [load])
+
+  // Auto-check: send reminders if within 30 days and notifications on
+  useEffect(() => {
+    if (!fullUser?.email || !fullUser?.notifications_enabled) return
+    const autoCheck = async () => {
+      try {
+        const allCars = await getCars(fullUser.id)
+        for (const car of allCars) {
+          const records = await getMaintenance(car.id)
+          const sent = await sendMaintenanceReminder({ user: fullUser, car, records })
+          if (sent) {
+            await markNotificationSent(fullUser.id)
+            showToast(`تم إرسال تذكير صيانة ${car.make} ${car.model} 📧`, 'info')
+            break // one email per session is enough
+          }
+        }
+      } catch (e) { console.error('Auto-reminder error:', e) }
+    }
+    // Small delay so app feels loaded first
+    const t = setTimeout(autoCheck, 3000)
+    return () => clearTimeout(t)
+  }, [fullUser?.id, fullUser?.email, fullUser?.notifications_enabled])
 
   const handleAddCar = async (data) => {
     const car = await createCar(user.id, data)
     showToast('تم إضافة السيارة')
     setCars(prev => [car, ...prev])
+    // Show subscribe popup after first car is added — only if no email yet
+    if (!user.email) {
+      setTimeout(() => setShowSubscribe(true), 600)
+    }
   }
 
   if (selectedCar) {
     return (
       <CarDetail
         car={selectedCar} userId={user.id}
+        user={user}
         onBack={() => setSelectedCar(null)}
         onCarUpdated={updated => setSelectedCar(updated)}
         onCarDeleted={id => { setCars(p => p.filter(c => c.id !== id)); setSelectedCar(null) }}
+        onUserUpdated={updated => { setFullUser(updated); localStorage.setItem('ct_user', JSON.stringify(updated)) }}
         showToast={showToast}
       />
     )
@@ -368,6 +412,12 @@ function CarsList({ user, onLogout, showToast }) {
       </div>
 
       <CarModal open={showAdd} onClose={() => setShowAdd(false)} onSave={handleAddCar} />
+      <EmailSubscribeModal
+        open={showSubscribe}
+        onClose={() => setShowSubscribe(false)}
+        user={user}
+        onSaved={updated => { setFullUser(updated); localStorage.setItem('ct_user', JSON.stringify(updated)) }}
+      />
       <Footer />
     </div>
   )
