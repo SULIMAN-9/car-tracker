@@ -6,9 +6,9 @@ import { daysUntil, fmtKm, fmtMoney } from '../lib/constants'
 import emailjs from '@emailjs/browser'
 
 // Fill these after signing up at emailjs.com (see EMAILJS_SETUP.md)
-const EMAILJS_SERVICE_ID  = 'service_2bveurq'
-const EMAILJS_TEMPLATE_ID = 'template_1dqm62b'
-const EMAILJS_PUBLIC_KEY  = 'X72ftp86ZVDpYIETu'
+const EMAILJS_SERVICE_ID  = 'YOUR_SERVICE_ID'
+const EMAILJS_TEMPLATE_ID = 'YOUR_TEMPLATE_ID'
+const EMAILJS_PUBLIC_KEY  = 'YOUR_PUBLIC_KEY'
 
 export default function ReminderModal({ open, onClose, car, records, user }) {
   const [email,   setEmail]   = useState('')

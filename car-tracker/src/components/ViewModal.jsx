@@ -1,4 +1,4 @@
-import { Modal, Btn, Badge } from '../components/UI'
+import { Modal, Btn, Badge } from './UI'
 import { getCat, getStatus, fmtMoney, fmtKm, daysUntil } from '../lib/constants'
 import { motion } from 'framer-motion'
 

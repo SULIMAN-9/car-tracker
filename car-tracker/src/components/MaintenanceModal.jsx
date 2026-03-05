@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Plus, Trash2, Upload, X, Image } from 'lucide-react'
-import { Modal, Btn, Chip } from '../components/UI'
+import { Modal, Btn, Chip } from './UI'
 import { CATEGORIES, STATUSES, today } from '../lib/constants'
 import { supabase } from '../lib/supabase'
 
