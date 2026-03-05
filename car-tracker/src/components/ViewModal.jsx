@@ -2,13 +2,14 @@ import { Modal, Btn, Badge } from '../components/UI'
 import { getCat, getStatus, fmtMoney, fmtKm, daysUntil } from '../lib/constants'
 import { motion } from 'framer-motion'
 
-export default function ViewModal({ open, onClose, record, onEdit }) {
+export default function ViewModal({ open, onClose, record, onEdit, isLatest }) {
   if (!record) return null
   const cat = getCat(record.category)
   const st  = getStatus(record.status)
   const du  = daysUntil(record.next_service_date)
   const parts  = record.spare_parts || []
-  const photos = Array.isArray(record.photos) ? record.photos : (record.photos ? JSON.parse(record.photos) : [])
+  // Supabase returns JSONB as already-parsed object — never JSON.parse it
+  const photos = Array.isArray(record.photos) ? record.photos : []
   const partsTotal = parts.reduce((s, p) => s + (p.unit_price || 0) * (p.quantity || 1), 0)
 
   const rows = [
@@ -51,16 +52,31 @@ export default function ViewModal({ open, onClose, record, onEdit }) {
           ))}
         </div>
 
-        {/* Next service */}
+        {/* Next service — only show overdue/urgent on the latest record */}
         {record.next_service_date && (
-          <div className={`rounded-2xl p-4 border ${du !== null && du < 0 ? 'bg-[rgba(255,69,58,0.1)] border-[rgba(255,69,58,0.3)]' : 'bg-[rgba(255,159,10,0.1)] border-[rgba(255,159,10,0.3)]'}`}>
-            <div className="text-xs font-bold mb-1" style={{ color: du !== null && du < 0 ? '#FF453A' : '#FF9F0A' }}>
-              ⏰ الصيانة القادمة
+          <div className={`rounded-2xl p-4 border ${
+            isLatest && du !== null && du < 0
+              ? 'bg-[rgba(255,69,58,0.1)] border-[rgba(255,69,58,0.3)]'
+              : 'bg-[rgba(255,159,10,0.08)] border-[rgba(255,159,10,0.2)]'
+          }`}>
+            <div className="text-xs font-bold mb-1" style={{
+              color: isLatest && du !== null && du < 0 ? '#FF453A' : '#FF9F0A'
+            }}>
+              ⏰ الصيانة القادمة لهذا السجل
             </div>
             <div className="text-l1 font-semibold">{record.next_service_date}</div>
-            {du !== null && (
-              <div className="text-sm mt-1" style={{ color: du < 0 ? '#FF453A' : '#FF9F0A' }}>
-                {du < 0 ? `متأخرة منذ ${Math.abs(du)} يوم` : `خلال ${du} يوم`}
+            {isLatest && du !== null && (
+              <div className="text-sm mt-1 font-semibold" style={{ color: du < 0 ? '#FF453A' : '#30D158' }}>
+                {du < 0
+                  ? `⚠️ متأخرة منذ ${Math.abs(du)} يوم`
+                  : du === 0
+                  ? '✅ اليوم!'
+                  : `✅ خلال ${du} يوم`}
+              </div>
+            )}
+            {!isLatest && (
+              <div className="text-xs text-l4 mt-1">
+                (هذا سجل قديم — راجع أحدث سجل للحالة الفعلية)
               </div>
             )}
             {record.next_service_mileage && (

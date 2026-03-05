@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Plus, LogOut, ChevronLeft, Car, Filter } from 'lucide-react'
+import { Plus, LogOut, ChevronLeft, Car, Filter, Bell } from 'lucide-react'
 import { getCars, createCar, updateCar, deleteCar, getMaintenance, createMaintenance, updateMaintenance, deleteMaintenance } from '../lib/supabase'
 import { getCat, getStatus, fmtMoney, fmtKm, daysUntil, daysAgo, CATEGORIES } from '../lib/constants'
 import { Card, StatCard, Btn, Badge, Empty, SkeletonCard, Confirm, SectionHeader } from '../components/UI'
@@ -9,6 +9,7 @@ import CarModal from '../components/CarModal'
 import MaintenanceModal from '../components/MaintenanceModal'
 import ViewModal from '../components/ViewModal'
 import Footer from '../components/Footer'
+import ReminderModal from '../components/ReminderModal'
 
 // ── Toast hook ───────────────────────────────────────────
 function useToast() {
@@ -21,7 +22,7 @@ function useToast() {
 }
 
 // ── Maintenance Card ──────────────────────────────────────
-function MaintCard({ record, onView, onEdit, onDelete }) {
+function MaintCard({ record, isLatest, onView, onEdit, onDelete }) {
   const cat = getCat(record.category)
   const st  = getStatus(record.status)
   const du  = daysUntil(record.next_service_date)
@@ -63,12 +64,13 @@ function MaintCard({ record, onView, onEdit, onDelete }) {
         )}
 
         {/* Parts / next service strip */}
-        {(parts.length > 0 || record.next_service_date) && (
+        {(parts.length > 0 || (isLatest && record.next_service_date)) && (
           <div className="bg-bg3 rounded-xl px-3 py-2 flex items-center justify-between gap-2 mb-3 text-xs">
             <div className="flex gap-3 text-l4">
               {parts.length > 0 && <span>⚙ {parts.length} قطعة</span>}
             </div>
-            {record.next_service_date && (
+            {/* Only show next-service reminder on the most recent record */}
+            {isLatest && record.next_service_date && (
               <span className="font-semibold" style={{ color: du !== null && du < 0 ? '#FF453A' : '#FF9F0A' }}>
                 ⏰ {du !== null && du < 0 ? 'متأخرة' : `خلال ${du} يوم`}
               </span>
@@ -98,6 +100,7 @@ function CarDetail({ car, userId, onBack, onCarUpdated, onCarDeleted, showToast 
   const [deleteId, setDeleteId] = useState(null)
   const [showEditCar, setShowEditCar] = useState(false)
   const [showDeleteCar, setShowDeleteCar] = useState(false)
+  const [showReminder, setShowReminder] = useState(false)
 
   const fuel_icons = { بنزين: '⛽', ديزل: '🛢', هجين: '⚡', كهربائي: '🔋' }
 
@@ -115,7 +118,10 @@ function CarDetail({ car, userId, onBack, onCarUpdated, onCarDeleted, showToast 
   // Stats
   const totalCost = records.reduce((s, r) => s + (r.cost || 0), 0)
   const lastRec   = records[0]
+  // Next service = taken from the latest record that has a next_service_date set
   const nextSvc   = records.find(r => r.next_service_date)
+  const nextSvcDu = daysUntil(nextSvc?.next_service_date)
+  const nextSvcColor = nextSvcDu !== null && nextSvcDu < 0 ? '#FF453A' : nextSvcDu !== null && nextSvcDu <= 7 ? '#FF9F0A' : '#30D158' 
   const catCosts  = {}
   records.forEach(r => { catCosts[r.category] = (catCosts[r.category] || 0) + (r.cost || 0) })
   const topCat = Object.entries(catCosts).sort((a, b) => b[1] - a[1])[0]?.[0]
@@ -156,7 +162,11 @@ function CarDetail({ car, userId, onBack, onCarUpdated, onCarDeleted, showToast 
     { icon: '💰', label: 'إجمالي المصروف', value: fmtMoney(totalCost),     color: '#0A84FF', delay: 0 },
     { icon: '🔧', label: 'عدد الخدمات',   value: `${records.length}`,       color: '#30D158', delay: 0.05 },
     { icon: '📅', label: 'آخر صيانة',     value: lastRec ? `${daysAgo(lastRec.date)} يوم` : '—', color: '#FF9F0A', delay: 0.10 },
-    { icon: '⏰', label: 'الصيانة القادمة', value: nextSvc?.next_service_date || 'غير محدد', color: '#FF453A', delay: 0.15 },
+    { icon: '⏰', label: 'الصيانة القادمة',
+      value: nextSvc?.next_service_date
+        ? (nextSvcDu < 0 ? `متأخرة ${Math.abs(nextSvcDu)} يوم` : nextSvcDu === 0 ? 'اليوم!' : `خلال ${nextSvcDu} يوم`)
+        : 'غير محدد',
+      color: nextSvc ? nextSvcColor : '#8E8E9A', delay: 0.15 },
     { icon: '🛣', label: 'آخر عداد',      value: lastRec?.mileage ? fmtKm(lastRec.mileage) : '—', color: '#8E8E9A', delay: 0.20 },
     { icon: '🏆', label: 'أكثر فئة',      value: topCat || '—',              color: '#BF5AF2', delay: 0.25 },
   ]
@@ -180,6 +190,11 @@ function CarDetail({ car, userId, onBack, onCarUpdated, onCarDeleted, showToast 
             </div>
             <div className="flex gap-2">
               <Btn variant="ghost" onClick={() => setShowEditCar(true)} className="text-sm py-2 px-3 hidden sm:flex">تعديل</Btn>
+              <button onClick={() => setShowReminder(true)}
+                className="w-9 h-9 rounded-full bg-bg3 flex items-center justify-center text-l3 hover:text-orange hover:bg-[#3D2600] transition-all"
+                title="إرسال تذكير بالإيميل">
+                <Bell size={17}/>
+              </button>
               <Btn onClick={() => setShowAdd(true)} className="text-sm py-2 px-4 gap-1">
                 <Plus size={15} /> إضافة صيانة
               </Btn>
@@ -213,8 +228,9 @@ function CarDetail({ car, userId, onBack, onCarUpdated, onCarDeleted, showToast 
         ) : (
           <motion.div layout className="flex flex-col gap-3">
             <AnimatePresence mode="popLayout">
-              {filtered.map(rec => (
+              {filtered.map((rec) => (
                 <MaintCard key={rec.id} record={rec}
+                  isLatest={rec.id === records[0]?.id}
                   onView={() => setViewRecord(rec)}
                   onEdit={() => setEditRecord(rec)}
                   onDelete={() => setDeleteId(rec.id)} />
@@ -238,6 +254,7 @@ function CarDetail({ car, userId, onBack, onCarUpdated, onCarDeleted, showToast 
       <MaintenanceModal open={showAdd || !!editRecord} onClose={() => { setShowAdd(false); setEditRecord(null) }}
         onSave={handleSaveMaint} record={editRecord} />
       <ViewModal open={!!viewRecord} onClose={() => setViewRecord(null)} record={viewRecord}
+        isLatest={viewRecord?.id === records[0]?.id}
         onEdit={() => { setEditRecord(viewRecord); setViewRecord(null) }} />
       <Confirm open={!!deleteId} onClose={() => setDeleteId(null)} onConfirm={handleDelete}
         title="حذف السجل" message="هل تريد حذف هذا السجل نهائياً؟ لا يمكن التراجع عن هذا الإجراء." />
@@ -245,6 +262,8 @@ function CarDetail({ car, userId, onBack, onCarUpdated, onCarDeleted, showToast 
       <Confirm open={showDeleteCar} onClose={() => setShowDeleteCar(false)} onConfirm={handleDeleteCar}
         title="حذف السيارة"
         message={`هل تريد حذف ${car.make} ${car.model} وجميع سجلات صيانتها؟ لا يمكن التراجع.`} />
+      <ReminderModal open={showReminder} onClose={() => setShowReminder(false)}
+        car={car} records={records} user={{name:'المستخدم'}} />
     </div>
   )
 }

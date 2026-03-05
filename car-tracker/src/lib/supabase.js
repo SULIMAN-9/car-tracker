@@ -67,7 +67,7 @@ export async function deleteCar(id) {
 export async function getMaintenance(carId) {
   const { data, error } = await supabase
     .from('maintenance')
-    .select('*, spare_parts(*), photos')
+    .select('*, spare_parts(*)')
     .eq('car_id', carId)
     .order('date', { ascending: false })
   if (error) throw error
@@ -75,6 +75,7 @@ export async function getMaintenance(carId) {
 }
 
 export async function createMaintenance(record) {
+  // Strip spare_parts (handled separately) but keep photos in rec
   const { spare_parts, ...rec } = record
   const { data, error } = await supabase
     .from('maintenance')
@@ -91,6 +92,7 @@ export async function createMaintenance(record) {
 }
 
 export async function updateMaintenance(id, record) {
+  // Strip spare_parts (handled separately) but keep photos in rec
   const { spare_parts, ...rec } = record
   const { data, error } = await supabase
     .from('maintenance')
@@ -118,6 +120,6 @@ export async function deleteMaintenance(id) {
 export async function getAllDataForAdmin() {
   const { data: users } = await supabase.from('users').select('*').order('created_at')
   const { data: cars }  = await supabase.from('cars').select('*').order('created_at')
-  const { data: maint } = await supabase.from('maintenance').select('*, spare_parts(*), photos').order('date')
+  const { data: maint } = await supabase.from('maintenance').select('*, spare_parts(*)').order('date')
   return { users, cars, maintenance: maint }
 }
