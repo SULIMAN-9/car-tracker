@@ -6,7 +6,7 @@ import { daysUntil, fmtKm, fmtMoney } from '../lib/constants'
 import emailjs from '@emailjs/browser'
 
 // Fill these after signing up at emailjs.com (see EMAILJS_SETUP.md)
-const EMAILJS_SERVICE_ID  = 'service_1lc4hnm'
+const EMAILJS_SERVICE_ID  = 'service_tj03owl'
 const EMAILJS_TEMPLATE_ID = 'template_1dqm62b'
 const EMAILJS_PUBLIC_KEY  = 'X72ftp86ZVDpYIETu'
 
